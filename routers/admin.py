@@ -11,7 +11,7 @@ class KickUser(BaseModel):
     printerId: str
 
 # Dependency to get database
-async def get_database():
+def get_database():
     from main import db
     if db is None:
         raise HTTPException(status_code=500, detail="Database not connected")

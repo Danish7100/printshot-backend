@@ -48,7 +48,7 @@ app.add_middleware(
 )
 
 # Dependency to get database
-async def get_database():
+def get_database():
     if db is None:
         raise HTTPException(status_code=500, detail="Database not connected")
     return db
