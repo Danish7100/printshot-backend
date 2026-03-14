@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional
 import uuid
+import os
 from datetime import datetime
 from pymongo.database import Database
 import random
@@ -94,5 +95,55 @@ async def get_printer_status(printerName: str):
         random_status = random.choice(mock_statuses)
         
         return {"status": random_status}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/busy")
+async def check_printer_busy(piId: str, printerId: str, db: Database = Depends(get_database)):
+    """
+    Check if printer is busy by querying the real Pi via /busyapi
+    This endpoint receives fakePiId and fakePrinterId from frontend,
+    looks up the real piId, and queries the Pi controller
+    """
+    try:
+        # Find printer by fake IDs to get real piId
+        printer = db.printers.find_one(
+            {"fakePiId": piId, "fakePrinterId": printerId},
+            {"_id": 0, "piId": 1, "printerName": 1}
+        )
+
+        if not printer:
+            raise HTTPException(status_code=404, detail="Printer not found")
+
+        real_pi_id = printer.get("piId")
+        real_printer_name = printer.get("printerName")
+        
+        if not real_pi_id:
+            raise HTTPException(status_code=500, detail="Real Pi ID not configured")
+
+        # Query the Pi controller's /busyapi endpoint
+        import httpx
+        pi_url = f"http://{real_pi_id}:5050/busyapi"
+        
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(
+                pi_url,
+                headers={"Authorization": f"Bearer {os.getenv('PI_AUTH_TOKEN', '')}"}
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(status_code=502, detail="Failed to reach printer controller")
+            
+            status_data = response.json()
+            
+            # Extract status for the specific printer
+            printer_status = status_data.get(real_printer_name, {}).get("status", "unknown")
+            
+            return {"status": printer_status}
+            
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Printer controller timeout")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail=f"Cannot reach printer: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

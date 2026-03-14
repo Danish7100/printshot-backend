@@ -27,10 +27,10 @@ def get_database():
 @router.post("/add")
 async def add_to_queue(queue_data: QueueAdd, db: Database = Depends(get_database)):
     try:
-        success = await acquire_lock(db, queue_data.piId, queue_data.printerId, queue_data.userId)
+        success = acquire_lock(db, queue_data.piId, queue_data.printerId, queue_data.userId)
         
         # Broadcast real-time update
-        updated_queue = await get_queue(db, queue_data.piId, queue_data.printerId)
+        updated_queue = get_queue(db, queue_data.piId, queue_data.printerId)
         await ws_manager.broadcast_queue_update(queue_data.piId, queue_data.printerId, updated_queue)
         
         return {"success": success}
@@ -40,10 +40,10 @@ async def add_to_queue(queue_data: QueueAdd, db: Database = Depends(get_database
 @router.post("/release")
 async def release_from_queue(queue_data: QueueRelease, db: Database = Depends(get_database)):
     try:
-        success = await release_lock(db, queue_data.piId, queue_data.printerId, queue_data.userId)
+        success = release_lock(db, queue_data.piId, queue_data.printerId, queue_data.userId)
         
         # Broadcast real-time update
-        updated_queue = await get_queue(db, queue_data.piId, queue_data.printerId)
+        updated_queue = get_queue(db, queue_data.piId, queue_data.printerId)
         await ws_manager.broadcast_queue_update(queue_data.piId, queue_data.printerId, updated_queue)
         
         return {"success": success}
@@ -59,7 +59,7 @@ async def get_queue_status(piId: str, printerId: str, db: Database = Depends(get
             print("Database not connected")
             raise HTTPException(status_code=500, detail="Database not connected")
         
-        queue = await get_queue(db, piId, printerId)
+        queue = get_queue(db, piId, printerId)
         print(f"Queue result: {queue}")
         
         safe_queue = queue if isinstance(queue, list) else []

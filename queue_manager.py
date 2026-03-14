@@ -3,14 +3,14 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from pymongo.database import Database
 
-async def get_real_ids(db: Database, fake_pi_id: str, fake_printer_id: str) -> Optional[Dict[str, str]]:
+def get_real_ids(db: Database, fake_pi_id: str, fake_printer_id: str) -> Optional[Dict[str, str]]:
     """Get real IDs from fake IDs"""
     printer_doc = db.printers.find_one({"fakePiId": fake_pi_id, "fakePrinterId": fake_printer_id})
     if printer_doc:
         return {"piId": printer_doc["piId"], "printerId": printer_doc["printerName"]}
     return None
 
-async def remove_user_from_all_queues(db: Database, user_id: str):
+def remove_user_from_all_queues(db: Database, user_id: str):
     """Remove user from all queues"""
     queues_with_user = list(db.queues.find({"queue.userId": user_id}))
 
@@ -27,14 +27,14 @@ async def remove_user_from_all_queues(db: Database, user_id: str):
             {"$set": {"queue": updated_queue}}
         )
 
-async def get_queue(db: Database, fake_pi_id: str, fake_printer_id: str) -> List[Dict[str, Any]]:
+def get_queue(db: Database, fake_pi_id: str, fake_printer_id: str) -> List[Dict[str, Any]]:
     """Get queue for a printer"""
     try:
         if not db:
             print("Database not connected")
             return []
         
-        real_ids = await get_real_ids(db, fake_pi_id, fake_printer_id)
+        real_ids = get_real_ids(db, fake_pi_id, fake_printer_id)
         if not real_ids:
             print(f"No real IDs found for: {fake_pi_id}, {fake_printer_id}")
             return []
@@ -46,11 +46,11 @@ async def get_queue(db: Database, fake_pi_id: str, fake_printer_id: str) -> List
         print(f"Error in get_queue: {e}")
         return []
 
-async def acquire_lock(db: Database, fake_pi_id: str, fake_printer_id: str, user_id: str) -> bool:
+def acquire_lock(db: Database, fake_pi_id: str, fake_printer_id: str, user_id: str) -> bool:
     """Add user to queue and acquire lock if possible"""
-    await remove_user_from_all_queues(db, user_id)
+    remove_user_from_all_queues(db, user_id)
 
-    real_ids = await get_real_ids(db, fake_pi_id, fake_printer_id)
+    real_ids = get_real_ids(db, fake_pi_id, fake_printer_id)
     if not real_ids:
         raise Exception("Printer not found with the provided IDs.")
 
@@ -91,9 +91,9 @@ async def acquire_lock(db: Database, fake_pi_id: str, fake_printer_id: str, user
         })
         return True
 
-async def release_lock(db: Database, fake_pi_id: str, fake_printer_id: str, user_id: str) -> bool:
+def release_lock(db: Database, fake_pi_id: str, fake_printer_id: str, user_id: str) -> bool:
     """Release user from queue"""
-    real_ids = await get_real_ids(db, fake_pi_id, fake_printer_id)
+    real_ids = get_real_ids(db, fake_pi_id, fake_printer_id)
     if not real_ids:
         return False
 

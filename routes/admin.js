@@ -1,5 +1,35 @@
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
+
+router.post('/verify-password', async (req, res) => {
+  try {
+    const { password } = req.body || {};
+    const expectedPassword = process.env.ADMIN_PASSWORD;
+
+    if (!expectedPassword) {
+      return res.status(500).json({ error: 'Admin password is not configured' });
+    }
+
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required' });
+    }
+
+    const providedBuffer = Buffer.from(password);
+    const expectedBuffer = Buffer.from(expectedPassword);
+    const matches =
+      providedBuffer.length === expectedBuffer.length &&
+      crypto.timingSafeEqual(providedBuffer, expectedBuffer);
+
+    if (!matches) {
+      return res.status(401).json({ error: 'Invalid password' });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Get admin queue status
 router.get('/queue', async (req, res) => {

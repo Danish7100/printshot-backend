@@ -9,16 +9,24 @@ class WebSocketManager {
   initialize(server) {
     this.wss = new WebSocket.Server({ server });
     
-    this.wss.on('connection', (ws, req) => {
-      console.log('New WebSocket connection');
-
+    this.wss.on('connection', (ws) => {
       ws.on('message', (message) => {
         try {
-          const data = JSON.parse(message);
+          const rawMessage = typeof message === 'string' ? message : message.toString();
+          if (rawMessage.length > 4096) {
+            ws.close();
+            return;
+          }
+
+          const data = JSON.parse(rawMessage);
           
           if (data.type === 'register') {
+            if (typeof data.userId !== 'string' || data.userId.length > 320 || data.userId.length === 0) {
+              ws.close();
+              return;
+            }
+
             this.clients.set(data.userId, ws);
-            console.log(`User ${data.userId} registered for real-time updates`);
             
             // Send confirmation
             ws.send(JSON.stringify({
@@ -33,13 +41,12 @@ class WebSocketManager {
 
       ws.on('close', () => {
         // Remove client when disconnected
-        for (const [userId, client] of this.clients.entries()) {
-          if (client === ws) {
-            this.clients.delete(userId);
-            console.log(`User ${userId} disconnected`);
-            break;
+          for (const [userId, client] of this.clients.entries()) {
+            if (client === ws) {
+              this.clients.delete(userId);
+              break;
+            }
           }
-        }
       });
 
       ws.on('error', (error) => {
@@ -65,8 +72,7 @@ class WebSocketManager {
         sentCount++;
       }
     });
-    
-    console.log(`Queue update sent to ${sentCount} clients`);
+    return sentCount;
   }
 
   // Send message to specific user

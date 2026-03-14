@@ -10,16 +10,23 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 4000;
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://127.0.0.1:3000,https://printshot-webapp.vercel.app')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+
+app.set('trust proxy', true);
+app.disable('x-powered-by');
 
 // Initialize WebSocket
 wsManager.initialize(server);
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  origin: allowedOrigins,
   credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
 
 // MongoDB connection
 let db;
@@ -42,6 +49,7 @@ app.use('/api/queue', require('./routes/queue'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api', require('./routes/documents'));
+app.use('/api/pi', require('./routes/pi-events'));
 app.use('/api', require('./routes/test'));
 
 // Health check
@@ -51,12 +59,19 @@ app.get('/health', (req, res) => {
 
 // Simple test endpoint
 app.get('/api/test', (req, res) => {
+  if (process.env.ALLOW_DEBUG_ENDPOINTS !== 'true') {
+    return res.status(404).json({ error: 'Not found' });
+  }
   res.json({ message: 'Backend is working!', queue: [] });
 });
 
 // Test queue with mock data
 app.get('/api/test-queue-data', async (req, res) => {
   try {
+    if (process.env.ALLOW_DEBUG_ENDPOINTS !== 'true') {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
     if (!db) {
       return res.status(500).json({ error: 'Database not connected' });
     }
@@ -79,4 +94,8 @@ app.get('/api/test-queue-data', async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`PrintShot backend running on port ${PORT} with WebSocket support`);
+  console.log('Environment check:');
+  console.log('- MongoDB:', process.env.MONGODB_URI ? '✓ Configured' : '✗ Missing');
+  console.log('- Razorpay:', process.env.RAZORPAY_KEY_ID ? '✓ Configured' : '✗ Missing');
+  console.log('- PI Token:', process.env.PI_BEARER_TOKEN ? '✓ Configured' : '✗ Missing');
 });

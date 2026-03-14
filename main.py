@@ -13,6 +13,8 @@ load_dotenv()
 # Global variables
 db = None
 ws_manager = WebSocketManager()
+razorpay_key_id = os.getenv('RAZORPAY_KEY_ID')
+razorpay_key_secret = os.getenv('RAZORPAY_KEY_SECRET')
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -41,7 +43,12 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=[
+        "http://localhost:3000", 
+        "http://127.0.0.1:3000",
+        "https://printshot-webapp.vercel.app",
+        "*"  # Allow all origins for testing
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -63,6 +70,15 @@ app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 @app.get("/health")
 async def health_check():
     return {"status": "OK", "timestamp": "2024-01-01T00:00:00.000Z"}
+
+# Config check endpoint
+@app.get("/api/config-check")
+async def config_check():
+    return {
+        "razorpay_configured": razorpay_key_id is not None and razorpay_key_secret is not None,
+        "razorpay_key_id_present": razorpay_key_id is not None,
+        "db_connected": db is not None
+    }
 
 # Test endpoint
 @app.get("/api/test")

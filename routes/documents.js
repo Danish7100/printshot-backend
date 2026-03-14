@@ -1,25 +1,14 @@
 const express = require('express');
-const multer = require('multer');
-const path = require('path');
 const fs = require('fs').promises;
 const router = express.Router();
+const {
+  cleanupFile,
+  createUploadMiddleware,
+  dispatchPrintJob,
+  maxUploadSize
+} = require('./print-helper');
 
-// Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, '../uploads');
-fs.mkdir(uploadsDir, { recursive: true }).catch(console.error);
-
-// Configure multer for temporary file storage
-const upload = multer({ 
-  storage: multer.diskStorage({
-    destination: uploadsDir,
-    filename: (req, file, cb) => {
-      // Create unique filename with timestamp
-      const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1E9)}-${file.originalname}`;
-      cb(null, uniqueName);
-    }
-  }),
-  limits: { fileSize: Infinity }
-});
+const upload = createUploadMiddleware();
 
 // Count pages in PDF
 router.post('/count-pages', upload.single('file'), async (req, res) => {
@@ -86,42 +75,36 @@ async function countPDFPages(buffer) {
   }
 }
 
-// Print document
+// Print document - uses the same dispatch path as payment verification
 router.post('/print', upload.single('file'), async (req, res) => {
   try {
-    const { piId, printerId, paymentId, orderId, userId } = req.body;
+    const result = await dispatchPrintJob(req);
+    res.json(result);
 
-    if (!req.file || !piId || !printerId || !paymentId || !orderId || !userId) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    try {
+      await fs.unlink(req.file.path);
+    } catch (cleanupError) {
+      console.error('[Print API] Failed to cleanup local file:', cleanupError);
     }
-
-    // Store print job in database
-    const printJob = {
-      piId,
-      printerId,
-      paymentId,
-      orderId,
-      userId,
-      fileName: req.file.originalname,
-      fileSize: req.file.size,
-      status: 'submitted',
-      createdAt: new Date()
-    };
-
-    await req.db.collection('printJobs').insertOne(printJob);
-
-    // In production, you would:
-    // 1. Send file to the actual printer via Pi
-    // 2. Update printer status
-    // 3. Handle print queue management
-
-    res.json({ 
-      success: true, 
-      message: 'Print job submitted successfully',
-      realPrinterName: printerId // Mock response
-    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[Print API] ERROR:', error.message);
+    console.error('[Print API] Full error:', error);
+    
+    // Cleanup file on error
+    if (req.file) {
+      cleanupFile(req.file.path);
+    }
+    
+    let errorMessage = 'An unknown error occurred.';
+    if (error.name === 'AbortError') {
+      errorMessage = 'Upload timed out. The printer may be offline or busy.';
+    } else if (error.code === 'LIMIT_FILE_SIZE') {
+      errorMessage = `File too large. Maximum allowed size is ${Math.floor(maxUploadSize / (1024 * 1024))}MB.`;
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    
+    res.status(error.statusCode || 500).json({ error: `Failed to send print job: ${errorMessage}` });
   }
 });
 

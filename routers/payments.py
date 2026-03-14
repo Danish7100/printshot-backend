@@ -60,8 +60,11 @@ async def create_razorpay_order(order: CreateOrder, db: Database = Depends(get_d
 
         razorpay_order = razorpay_client.order.create(data=options)
         return {"order_id": razorpay_order["id"], "finalAmount": order.amount}
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Failed to create payment order.")
+        print(f"Payment order creation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create payment order: {str(e)}")
 
 @router.post("/verify")
 async def verify_payment(payment: VerifyPayment, db: Database = Depends(get_database)):
@@ -77,4 +80,5 @@ async def verify_payment(payment: VerifyPayment, db: Database = Depends(get_data
         db.payments.insert_one(payment_doc)
         return {"success": True}
     except Exception as e:
+        print(f"Payment verification error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
