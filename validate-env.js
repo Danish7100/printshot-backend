@@ -11,7 +11,8 @@ const requiredVars = [
   'MONGODB_URI',
   'RAZORPAY_KEY_ID',
   'RAZORPAY_KEY_SECRET',
-  'PI_BEARER_TOKEN'
+  'PI_BEARER_TOKEN',
+  'ADMIN_PASSWORD'
 ];
 
 const optionalVars = [
